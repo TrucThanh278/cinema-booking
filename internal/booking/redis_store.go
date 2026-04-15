@@ -75,6 +75,40 @@ func (r *RedisStore) hold(b Booking) (Booking, error) {
 	}, nil
 }
 
+// Get all key of redis => get value base on key => add to list book and return
 func (r *RedisStore) ListBookings(moveID string) []Booking {
-	return []Booking{}
+	pattern := fmt.Sprintf("seat:%s:*", moveID)
+	var sessions []Booking
+	ctx := context.Background()
+
+	iter := r.rdb.Scan(ctx, 0, pattern, 0).Iterator()
+	for iter.Next(ctx) {
+		val, err := r.rdb.Get(ctx, iter.Val()).Result()
+		if err != nil {
+			continue
+		}
+		session, err := parseSession(val)
+		if err != nil {
+			continue
+		}
+		sessions = append(sessions, session)
+	}
+
+	return sessions
+}
+
+func parseSession(val string) (Booking, error) {
+	var data Booking
+
+	if err := json.Unmarshal([]byte(val), &data); err != nil {
+		return Booking{}, err
+	}
+
+	return Booking{
+		ID:      data.ID,
+		MovieID: data.MovieID,
+		SeatID:  data.SeatID,
+		UserID:  data.UserID,
+		Status:  data.Status,
+	}, nil
 }
